@@ -1,0 +1,15 @@
+{
+  "name": "fabian",
+  "version": "0.0.1",
+  "description": "Blog of Fabian Rios",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "pulp -w browserify -O --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test",
+    "build": "pulp browserify -O --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test"
+  },
+  "author": "Fabian Rios",
+  "license": "ISC",
+  "dependencies": {
+    "virtual-dom": "^2.1.1"
+  }
+}

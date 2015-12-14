@@ -1,0 +1,12 @@
+/bower_components/
+/node_modules/
+/client/output/
+/client/dist/
+/.psci*
+/src/.webpack.js
+.stack-work/
+.pulp-cache/
+.DS_Store
+*.swp
+*.swo
+npm-debug.log
