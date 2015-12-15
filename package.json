@@ -10,6 +10,7 @@
   "author": "Fabian Rios",
   "license": "ISC",
   "dependencies": {
+    "form-serialize": "^0.7.0",
     "virtual-dom": "^2.1.1"
   }
 }

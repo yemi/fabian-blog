@@ -72,12 +72,12 @@ createUser mt User {..} = do
 
 logIn :: LoginReq -> EitherT ServantErr IO LoginToken
 logIn LoginReq {..} = do
-  doc <- liftIO . runMongo . findOne $ select ["username" =: lrUsername] "users"
+  doc <- liftIO . runMongo . findOne $ select ["username" =: username] "users"
   case doc of
     Just doc' -> do
-      let lrPassword' = decodeLatin1 . SHA256.hash . encodeUtf8 $ lrPassword
+      let password' = decodeLatin1 . SHA256.hash . encodeUtf8 $ password
       let User {..} = documentToUser doc'
-      if lrPassword' == uPassword then do
+      if password' == uPassword then do
         uuid <- liftIO UUID.nextRandom
         let token = LoginToken (UUID.toText uuid)
         let doc = loginTokenToDocument token
@@ -105,7 +105,7 @@ checkAuth = maybe unauthorized runCheck
     left $ ServantErr 401 "You are not authenticated. Please sign-in" "" []
 
 renderPage' :: Maybe H.Html -> H.Html -> H.Html
-renderPage' head body = 
+renderPage' head body =
   H.docTypeHtml $ do
     H.head $ do
       H.meta ! A.charset "utf-8"
@@ -119,7 +119,7 @@ renderPage :: H.Html -> H.Html
 renderPage body = renderPage' Nothing body
 
 renderBlogPost :: BlogPost -> H.Html
-renderBlogPost BlogPost {..} = 
+renderBlogPost BlogPost {..} =
   H.div $ do
     H.h2 $ H.toMarkup title
     H.p $ H.toMarkup body
@@ -127,7 +127,7 @@ renderBlogPost BlogPost {..} =
 renderBlogPosts :: [BlogPost] -> H.Html
 renderBlogPosts posts =
   H.div $ do
-    foldMap renderBlogPost posts 
+    foldMap renderBlogPost posts
 
 startPage :: EitherT ServantErr IO H.Html
 startPage = do

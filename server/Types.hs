@@ -54,8 +54,8 @@ newtype LoginToken = LoginToken Text
   deriving (ToJSON, FromJSON, FromText, ToText, Ord, Eq)
 
 data LoginReq = LoginReq
-  { lrUsername :: Text
-  , lrPassword :: Text
+  { username :: Text
+  , password :: Text
   } deriving (Generic)
 
 instance FromJSON LoginReq
@@ -80,9 +80,9 @@ userToDocument User {..} =
 
 documentToUser :: Document -> User
 documentToUser doc = do
-  let username = getText "username" doc
-  let password = getText "password" doc
-  User username password
-  
+  let uUsername = getText "username" doc
+  let uPassword = getText "password" doc
+  User uUsername uPassword
+
 loginTokenToDocument :: LoginToken -> Document
 loginTokenToDocument (LoginToken token) = ["token" =: token]
