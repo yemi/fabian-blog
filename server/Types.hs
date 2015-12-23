@@ -4,6 +4,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Types where
 
 import GHC.Generics (Generic)
@@ -12,6 +14,8 @@ import Data.Aeson (ToJSON, FromJSON)
 import Data.Text (Text)
 
 import Database.MongoDB (Document, (=:))
+
+import Opaleye (Column(), PGText, PGInt4)
 
 import DB.Utils
 
@@ -42,10 +46,15 @@ data BlogPost = BlogPost
 instance ToJSON BlogPost
 instance FromJSON BlogPost
 
-data User = User
-  { uUsername :: Text
-  , uPassword :: Text
+data User' a b c d = User 
+  { uId :: a
+  , uUsername :: b
+  , uPassword :: c
+  , uEmail :: d
   } deriving (Show, Eq, Generic)
+
+type User = User' Int Text Text Text
+type UserColumn = User' (Column PGInt4) (Column PGText) (Column PGText) (Column PGText)
 
 instance ToJSON User
 instance FromJSON User
@@ -82,7 +91,8 @@ documentToUser :: Document -> User
 documentToUser doc = do
   let uUsername = getText "username" doc
   let uPassword = getText "password" doc
-  User uUsername uPassword
+  User 12 uUsername uPassword "test@te.se"
 
 loginTokenToDocument :: LoginToken -> Document
 loginTokenToDocument (LoginToken token) = ["token" =: token]
+

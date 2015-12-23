@@ -73,7 +73,7 @@ createUser :: Maybe LoginToken -> User -> EitherT ServantErr IO User
 createUser mt User {..} = do
   checkAuth mt
   let uPassword' = decodeLatin1 . SHA256.hash . encodeUtf8 $ uPassword
-  let user = User uUsername uPassword'
+  let user = User uId uUsername uPassword' uEmail
   let doc = userToDocument user
   liftIO . runMongo . insert "users" $ doc
   return user
@@ -151,4 +151,6 @@ adminPage = return . renderPage $ do
 main :: IO ()
 main = do
   putStrLn "Running on port 8080"
+  users <- runUsersQuery usersQuery
+  putStrLn $ show users
   run 8080 app
