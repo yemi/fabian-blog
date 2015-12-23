@@ -37,7 +37,15 @@ api :: Proxy API
 api = Proxy
 
 server :: Server API
-server = getBlogPosts :<|> createBlogPost :<|> getBlogPost :<|> createUser :<|> logIn :<|> logOut :<|> serveDirectory "client" :<|> adminPage :<|> startPage
+server = getBlogPosts :<|> 
+         createBlogPost :<|> 
+         getBlogPost :<|> 
+         createUser :<|> 
+         logIn :<|> 
+         logOut :<|> 
+         serveDirectory "client" :<|> 
+         adminPage :<|> 
+         startPage
 
 app :: Application
 app =  logStdout $ serve api server

@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch": "pulp -w browserify -O --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test",
-    "build": "pulp browserify -O --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test"
+    "build": "pulp browserify -O --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test",
+    "psc-ide-server": "psc-ide-server --output-directory client/output/"
   },
   "author": "Fabian Rios",
   "license": "ISC",

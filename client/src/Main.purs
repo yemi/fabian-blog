@@ -2,21 +2,29 @@ module Main where
 
 import Prelude
 
+import DOM (DOM())
+
 import Control.Alt ((<|>))
-import Control.Monad.Aff (Aff(), runAff)
+import Control.Apply ((*>))
+import Control.Monad.Aff (Aff(), runAff, forkAff)
+import Control.Monad.Aff.AVar (AVAR())
 import Control.Monad.Aff.Console (log)
 import Control.Monad.Eff (Eff())
 import Control.Monad.Eff.Exception (throwException)
 import Control.Monad.Eff.Console (CONSOLE())
+import Control.Monad.Eff.Exception (EXCEPTION())
+import Control.Plus (Plus)
 
-import Data.Either (Either(..))
-import Data.Functor (($>))
-import Data.Foreign.Class (readProp)
+import Data.Functor (($>), (<$))
+import Data.Either (Either())
+import Data.Functor.Coproduct (Coproduct(), left)
 import Data.Maybe (Maybe(..))
-import Data.Generic
 import Data.Foreign.Generic (Options(), defaultOptions, toJSONGeneric)
+import Data.Tuple (Tuple(..))
+import Data.String (toLower)
 
 import Halogen
+import Halogen.Component.ChildPath (ChildPath(), (:>), cpR, cpL)
 import Halogen.Util (appendToBody, onLoad)
 import qualified Halogen.HTML.Indexed as H
 import qualified Halogen.HTML.Events.Indexed as E
@@ -25,97 +33,100 @@ import qualified Halogen.HTML.Properties.Indexed as P
 import Halogen.HTML.Properties.Indexed (InputType(..))
 import Halogen.HTML.Events.Types (Event())
 
-import Network.HTTP.Affjax (AJAX(), URL(), Affjax(), affjax, defaultRequest)
-import Network.HTTP.Method (Method(..))
-import Network.HTTP.Affjax.Request (Requestable)
-import Network.HTTP.Affjax.Response (Respondable)
-import Network.HTTP.RequestHeader (RequestHeader(..))
+import Network.HTTP.Affjax (AJAX())
 
-foreign import getCredentials :: forall a. Event a -> Credentials
+import Routing (matchesAff)
+import Routing.Match (Match())
+import Routing.Match.Class (lit)
 
-type User =
-  { username :: String
-  }
+import Types 
+  ( User()
+  , Route(..)
+  , AppEffects()
+  , State()
+  , Query(..)
+  )
 
-newtype Credentials = Credentials
-  { username :: String
-  , password :: String
-  }
+import qualified Component.Login as Login
+import qualified Component.ItemList as ItemList
+import qualified Component.Create as Create
+import qualified Component.Profile as Profile
 
-derive instance genericCredentials :: Generic Credentials
+-- Children 
 
--- | The state of the component.
-type State =
-  { isLoading :: Boolean
-  , user :: Maybe User
-  }
+type ChildState = Either (Either Login.State ItemList.State) (Either Create.State Profile.State)
+type ChildQuery = Coproduct (Coproduct Login.Query ItemList.Query) (Coproduct Create.Query Profile.Query)
+type ChildSlot = Either (Either Login.Slot ItemList.Slot) (Either Create.Slot Profile.Slot)
 
+cpLogin :: ChildPath Login.State ChildState Login.Query ChildQuery Login.Slot ChildSlot
+cpLogin = cpL :> cpL
+
+cpItemList :: ChildPath ItemList.State ChildState ItemList.Query ChildQuery ItemList.Slot ChildSlot
+cpItemList = cpL :> cpR
+
+cpCreate :: ChildPath Create.State ChildState Create.Query ChildQuery Create.Slot ChildSlot
+cpCreate = cpR :> cpL
+
+cpProfile :: ChildPath Profile.State ChildState Profile.Query ChildQuery Profile.Slot ChildSlot
+cpProfile = cpR :> cpR
+
+-- Root component 
+
+type StateP eff = InstalledState State ChildState Query ChildQuery (Aff (AppEffects eff)) ChildSlot
+type QueryP = Coproduct Query (ChildF ChildSlot ChildQuery)
 
 initialState :: State
 initialState =
   { isLoading: true
   , user: Nothing
+  , currentPage: Login
   }
 
--- | The component query algebra.
-data Query a
-  = Login Credentials a
-
--- | The effects used in the app.
-type AppEffects eff = HalogenEffects (ajax :: AJAX, console :: CONSOLE | eff)
-
--- | The definition for the app's main UI component.
-ui :: forall eff. Component State Query (Aff (AppEffects eff))
-ui = component render eval
+ui :: forall eff. Component (StateP eff) QueryP (Aff (AppEffects eff))
+ui = parentComponent render eval
   where
-
-  render :: State -> ComponentHTML Query
-  render st =
-    H.div_
-      [ H.form_
-        [ H.input [ P.name "username" ]
-        , H.input [ P.name "password", P.inputType InputPassword ]
-        , H.button [ E.onClick (\ev -> EH.preventDefault $> (action $ Login (getCredentials ev))) ] [ H.text "Login" ]
+    render state =
+      H.div_
+        [ H.h1_ [ H.text "Admin" ]
+        , H.ul_ (map renderLink ["Login", "Posts", "Create", "Profile"])
+        , renderPage state.currentPage
         ]
-      ]
 
-  eval :: Natural Query (ComponentDSL State Query (Aff (AppEffects eff)))
-  --eval (SetCode code next) = modify (_ { code = code, result = Nothing :: Maybe String }) $> next
-  eval (Login cred next) = do
-    modify (_ { isLoading = true })
-    token <- liftAff' (login cred)
-    modify (_ { isLoading = false })
-    pure next
+    renderLink route = H.li_ [ H.a [ P.href ("#/" ++ toLower route) ] [ H.text route ] ]
 
--- | Post some PureScript code to the trypurescript API and fetch the JS result.
-fetchJS :: forall eff. String -> Aff (ajax :: AJAX | eff) String
-fetchJS code = do
-  result <- post "http://try.purescript.org/compile/text" code
-  let response = result.response
-  return case readProp "js" response <|> readProp "error" response of
-    Right js -> js
-    Left _ -> "Invalid response"
+    renderPage :: Route -> HTML (SlotConstructor ChildState ChildQuery (Aff (AppEffects eff)) ChildSlot) Query
+    renderPage Login = H.slot' cpLogin Login.Slot \_ -> { component: Login.ui, initialState: unit }
+    renderPage ItemList = H.slot' cpItemList ItemList.Slot \_ -> { component: ItemList.ui, initialState: unit }
+    renderPage Create = H.slot' cpCreate Create.Slot \_ -> { component: Create.ui, initialState: unit }
+    renderPage Profile = H.slot' cpProfile Profile.Slot \_ -> { component: Profile.ui, initialState: unit }
 
-opts :: Options
-opts = defaultOptions { unwrapNewtypes = true }
+    eval :: EvalParent Query State ChildState Query ChildQuery (Aff (AppEffects eff)) ChildSlot
+    eval (GoTo page next) = modify (_ { currentPage = page }) $> next
 
-post :: forall e a b. (Requestable a, Respondable b) => URL -> a -> Affjax e b
-post url content = affjax $ defaultRequest
-  { method = POST
-  , url = url
-  , content = Just content
-  , headers = [ RequestHeader "Accept" "application/json", RequestHeader "Content-Type" "application/json" ]
-  }
+-- Routing 
 
-login :: forall eff. Credentials -> Aff (ajax :: AJAX, console :: CONSOLE | eff) (Maybe String)
-login cred = do
-  result <- post "/api/user/login" $ toJSONGeneric opts cred
-  log $ toJSONGeneric opts cred
-  log $ "post /api/users/login response: " ++ result.response
-  return $ Just "test"
+routing :: Match Route
+routing = login <|> posts <|> create <|> profile
+  where 
+    route str = lit "" *> lit str
+    login = Login <$ route "login"
+    posts = ItemList <$ route "posts"
+    create = Create <$ route "create"
+    profile = Profile <$ route "profile"
 
--- | Run the app.
+redirects :: forall eff. Driver QueryP eff -> Maybe Route -> Route -> Aff (dom :: DOM, err :: EXCEPTION, avar :: AVAR | eff) Unit
+redirects driver _ = driver <<< left <<< action <<< GoTo
+
+routeSignal :: forall eff. Driver QueryP eff -> Aff (dom :: DOM, err :: EXCEPTION, avar :: AVAR | eff) Unit
+routeSignal driver = do
+  Tuple old new <- matchesAff routing
+  redirects driver old new
+
+-- Main
+  
 main :: Eff (AppEffects ()) Unit
 main = runAff throwException (const (pure unit)) $ do
-  app <- runUI ui initialState
+  app <- runUI ui $ installedState initialState
   onLoad $ appendToBody app.node
+  forkAff $ routeSignal app.driver
+
