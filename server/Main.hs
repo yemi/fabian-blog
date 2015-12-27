@@ -51,31 +51,28 @@ app :: Application
 app =  logStdout $ serve api server
 
 getBlogPosts :: EitherT ServantErr IO [BlogPost]
-getBlogPosts = do
-  docs <- liftIO . runMongo $ rest =<< find (select [] "blogPosts")
-  return $ documentToBlogPost <$> docs
+getBlogPosts = liftIO $ queryBlogPosts
 
 createBlogPost :: Maybe LoginToken -> BlogPost -> EitherT ServantErr IO BlogPost
 createBlogPost mt blogPost = do
   checkAuth mt
-  let doc = blogPostToDocument blogPost
-  liftIO . runMongo $ insert "blogPosts" doc
+  liftIO $ insertBlogPost blogPost
   return blogPost
 
-getBlogPost :: String -> EitherT ServantErr IO BlogPost
+getBlogPost :: String -> EitherT ServantErr IO () --BlogPost
 getBlogPost slug = do
-  doc <- liftIO . runMongo . findOne $ select ["slug" =: slug] "blogPosts"
-  case doc of
-    Just doc' -> return $ documentToBlogPost doc'
-    Nothing -> left $ err503 { errBody = "No blog posts found with the provided id." }
+  --doc <- liftIO . runMongo . findOne $ select ["slug" =: slug] "blogPosts"
+  --case doc of
+    --Just doc' -> return $ documentToBlogPost doc'
+    --Nothing -> left $ err503 { errBody = "No blog posts found with the provided id." }
+  return ()
 
 createUser :: Maybe LoginToken -> User -> EitherT ServantErr IO User
 createUser mt User {..} = do
   checkAuth mt
   let uPassword' = decodeLatin1 . SHA256.hash . encodeUtf8 $ uPassword
   let user = User uId uUsername uPassword' uEmail
-  let doc = userToDocument user
-  liftIO . runMongo . insert "users" $ doc
+  liftIO $ insertUser user
   return user
 
 logIn :: LoginReq -> EitherT ServantErr IO LoginToken
@@ -99,8 +96,8 @@ logOut mt = do
   checkAuth mt
   maybe (return ()) logOutAction mt
   where
-  logOutAction (LoginToken token) =
-    liftIO . runMongo . deleteOne $ select ["token" =: token] "validTokens"
+    logOutAction (LoginToken token) =
+      liftIO . runMongo . deleteOne $ select ["token" =: token] "validTokens"
 
 checkAuth :: Maybe LoginToken -> EitherT ServantErr IO ()
 checkAuth = maybe unauthorized runCheck
@@ -129,8 +126,8 @@ renderPage body = renderPage' Nothing body
 renderBlogPost :: BlogPost -> H.Html
 renderBlogPost BlogPost {..} =
   H.div $ do
-    H.h2 $ H.toMarkup title
-    H.p $ H.toMarkup body
+    H.h2 $ H.toMarkup bpTitle
+    H.p $ H.toMarkup bpBody
 
 renderBlogPosts :: [BlogPost] -> H.Html
 renderBlogPosts posts =
@@ -140,8 +137,9 @@ renderBlogPosts posts =
 startPage :: EitherT ServantErr IO H.Html
 startPage = do
   docs <- liftIO . runMongo $ rest =<< find (select [] "blogPosts")
-  let blogPosts = renderBlogPosts $ documentToBlogPost <$> docs
-  return $ renderPage blogPosts
+  --let blogPosts = renderBlogPosts $ documentToBlogPost <$> docs
+  --return $ renderPage blogPosts
+  return mempty
 
 adminPage :: EitherT ServantErr IO H.Html
 adminPage = return . renderPage $ do

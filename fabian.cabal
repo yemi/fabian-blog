@@ -30,6 +30,7 @@ executable fabian
                      , servant-server
                      , servant-blaze
                      , text
+                     , time
                      , uuid
                      , wai
                      , wai-extra

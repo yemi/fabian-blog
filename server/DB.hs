@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, ExtendedDefaultRules, NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -7,9 +8,13 @@ module DB where
 import qualified Database.MongoDB as MongoDB
 import Database.PostgreSQL.Simple (Connection, connectPostgreSQL)
 
+import Data.Int (Int64())
 import Data.Profunctor.Product (p4)
 import Data.Profunctor.Product.Default (Default)
 import Data.Profunctor.Product.TH (makeAdaptorAndInstance)
+import Data.Text.Encoding (decodeLatin1, encodeUtf8)
+
+import qualified Crypto.Hash.SHA256 as SHA256
 
 import Opaleye 
   ( Table(Table)
@@ -20,8 +25,10 @@ import Opaleye
   , required
   , optional
   , queryTable
+  , runInsert
   )
 import Opaleye.RunQuery (runQuery)
+import Opaleye.PGTypes (pgStrictText, pgUTCTime)
 
 import Types
 
@@ -37,22 +44,60 @@ runMongo action = do
 connection :: IO Connection
 connection = connectPostgreSQL "dbname='fabian_blog'"
 
+runInsert' :: Table setColumns getColumns -> setColumns -> IO Int64
+runInsert' table columns = do
+  conn <- connection
+  runInsert conn table columns
+
+-- Users
+
 $(makeAdaptorAndInstance "pUser" ''User')
 
-usersTable :: Table UserColumn UserColumn
-usersTable = Table "usersTable" $ pUser User { uId = required "user_id"
-                                             , uUsername = required "username"
-                                             , uPassword = required "password"
-                                             , uEmail = required "email" }
+usersTable :: Table UserSetColumn UserGetColumn
+usersTable = Table "users" $ 
+  pUser User { uId = optional "id"
+             , uUsername = required "username"
+             , uPassword = required "password"
+             , uEmail = required "email" 
+             }
 
-usersQuery :: Query UserColumn
+usersQuery :: Query UserGetColumn
 usersQuery = queryTable usersTable
 
-runUsersQuery :: Query UserColumn -> IO [User]
-runUsersQuery query = do 
-  conn <- connection
-  runQuery conn query
+runUsersQuery :: Query UserGetColumn -> IO [User]
+runUsersQuery query = flip runQuery query =<< connection
 
---insertUser :: User
+insertUser :: User -> IO Int64
+insertUser User {..} = runInsert' usersTable $ 
+  User Nothing 
+       (pgStrictText uUsername) 
+       (pgStrictText uPassword) 
+       (pgStrictText uEmail)
 
+-- Blog posts
+
+$(makeAdaptorAndInstance "pBlogPost" ''BlogPost')
+
+blogPostsTable :: Table BlogPostSetColumn BlogPostGetColumn
+blogPostsTable = Table "blog_posts" $ 
+  pBlogPost BlogPost { bpId = optional "id"
+                     , bpTitle = required "title"
+                     , bpSlug = required "slug"
+                     , bpBody = required "body"
+                     , bpCreatedAt = required "created_at"
+                     }
+
+blogPostsQuery :: Query BlogPostGetColumn
+blogPostsQuery = queryTable blogPostsTable
+
+queryBlogPosts :: IO [BlogPost]
+queryBlogPosts = flip runQuery blogPostsQuery =<< connection
+
+insertBlogPost :: BlogPost -> IO Int64
+insertBlogPost BlogPost {..} = runInsert' blogPostsTable $ 
+  BlogPost Nothing 
+           (pgStrictText bpTitle) 
+           (pgStrictText bpSlug) 
+           (pgStrictText bpBody) 
+           (pgUTCTime bpCreatedAt) 
 
