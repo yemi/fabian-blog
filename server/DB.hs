@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,6 +8,8 @@ module DB where
 
 import qualified Database.MongoDB as MongoDB
 import Database.PostgreSQL.Simple (Connection, connectPostgreSQL)
+
+import Control.Arrow (returnA)
 
 import Data.Int (Int64())
 import Data.Profunctor.Product (p4)
@@ -28,7 +31,8 @@ import Opaleye
   , runInsert
   )
 import Opaleye.RunQuery (runQuery)
-import Opaleye.PGTypes (pgStrictText, pgUTCTime)
+import Opaleye.PGTypes (pgString, pgStrictText, pgInt4, pgUTCTime)
+import Opaleye.Operators (restrict, (.==))
 
 import Types
 
@@ -92,6 +96,19 @@ blogPostsQuery = queryTable blogPostsTable
 
 queryBlogPosts :: IO [BlogPost]
 queryBlogPosts = flip runQuery blogPostsQuery =<< connection
+
+blogPostQuery :: Slug -> Query BlogPostGetColumn
+blogPostQuery slug = proc () -> do
+  row@(BlogPost _ _ bpSlug _ _) <- blogPostsQuery -< ()
+  restrict -< bpSlug .== pgString slug 
+  returnA -< row
+
+queryBlogPost :: Slug -> IO (Maybe BlogPost)
+queryBlogPost slug = do
+  blogPosts <- flip runQuery (blogPostQuery slug) =<< connection
+  return $ case blogPosts of
+    [] -> Nothing
+    [blogPost] -> Just blogPost
 
 insertBlogPost :: BlogPost -> IO Int64
 insertBlogPost BlogPost {..} = runInsert' blogPostsTable $ 

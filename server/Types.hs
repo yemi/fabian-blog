@@ -30,7 +30,7 @@ import Text.Blaze.Html5.Attributes
 
 type API = "api" :> "posts" :> Get '[JSON] [BlogPost] :<|>
            "api" :> "post" :> Authorized (ReqBody '[JSON] BlogPost :> Post '[JSON] BlogPost) :<|>
-           "api" :> "post" :> Capture "slug" String :> Get '[JSON] () :<|>
+           "api" :> "post" :> Capture "slug" String :> Get '[JSON] BlogPost :<|>
            "api" :> "user" :> Authorized (ReqBody '[JSON] User :> Post '[JSON] User) :<|>
            "api" :> "user" :> "login" :> ReqBody '[JSON] LoginReq :> Post '[JSON] LoginToken :<|>
            "api" :> "user" :> Authorized ("logout" :> Post '[JSON] ()) :<|>
@@ -95,6 +95,8 @@ instance FromJSON LoginReq
 instance ToJSON LoginReq
 
 type Authorized t = Header "Authorization" LoginToken :> t
+
+type Slug = String
 
 documentToUser :: Document -> User
 documentToUser doc = do

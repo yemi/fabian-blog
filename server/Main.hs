@@ -59,13 +59,12 @@ createBlogPost mt blogPost = do
   liftIO $ insertBlogPost blogPost
   return blogPost
 
-getBlogPost :: String -> EitherT ServantErr IO () --BlogPost
+getBlogPost :: Slug -> EitherT ServantErr IO BlogPost
 getBlogPost slug = do
-  --doc <- liftIO . runMongo . findOne $ select ["slug" =: slug] "blogPosts"
-  --case doc of
-    --Just doc' -> return $ documentToBlogPost doc'
-    --Nothing -> left $ err503 { errBody = "No blog posts found with the provided id." }
-  return ()
+  blogPost <- liftIO $ queryBlogPost slug
+  case blogPost of
+    Just blogPost' -> return blogPost'
+    Nothing -> left $ err503 { errBody = "No blog posts found with the provided id." }
 
 createUser :: Maybe LoginToken -> User -> EitherT ServantErr IO User
 createUser mt User {..} = do
@@ -136,10 +135,8 @@ renderBlogPosts posts =
 
 startPage :: EitherT ServantErr IO H.Html
 startPage = do
-  docs <- liftIO . runMongo $ rest =<< find (select [] "blogPosts")
-  --let blogPosts = renderBlogPosts $ documentToBlogPost <$> docs
-  --return $ renderPage blogPosts
-  return mempty
+  blogPosts <- liftIO $ queryBlogPosts
+  return . renderPage $ renderBlogPosts blogPosts
 
 adminPage :: EitherT ServantErr IO H.Html
 adminPage = return . renderPage $ do
@@ -149,6 +146,4 @@ adminPage = return . renderPage $ do
 main :: IO ()
 main = do
   putStrLn "Running on port 8080"
-  users <- runUsersQuery usersQuery
-  putStrLn $ show users
   run 8080 app
