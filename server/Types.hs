@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -43,7 +43,7 @@ data BlogPost' a b c d e = BlogPost
   , bpTitle :: b
   , bpSlug :: c
   , bpBody :: d
-  , bpCreatedAt :: e
+  , bpCreatedOn :: e
   } deriving (Show, Eq, Generic)
   
 type BlogPost = BlogPost' Int Text Text Text UTCTime
@@ -83,8 +83,18 @@ type UserGetColumn = User' (Column PGInt4)
 instance ToJSON User
 instance FromJSON User
 
-newtype LoginToken = LoginToken Text
-  deriving (ToJSON, FromJSON, FromText, ToText, Ord, Eq)
+data LoginToken' a b = LoginToken 
+  { ltTokenKey :: a 
+  , ltCreatedOn :: b
+  } deriving (Show, Eq, Generic)
+
+type LoginToken = LoginToken' Text UTCTime 
+type LoginTokenColumn = LoginToken' (Column PGText) (Column PGTimestamptz)
+
+instance ToJSON LoginToken
+instance FromJSON LoginToken
+instance ToText LoginToken
+instance FromText LoginToken
 
 data LoginReq = LoginReq
   { username :: Text
@@ -104,6 +114,6 @@ documentToUser doc = do
   let uPassword = getText "password" doc
   User 12 uUsername uPassword "test@te.se"
 
-loginTokenToDocument :: LoginToken -> Document
-loginTokenToDocument (LoginToken token) = ["token" =: token]
+--loginTokenToDocument :: LoginToken -> Document
+--loginTokenToDocument (LoginToken token) = ["token" =: token]
 

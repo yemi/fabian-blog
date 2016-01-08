@@ -15,6 +15,7 @@ import Data.Int (Int64())
 import Data.Profunctor.Product (p4)
 import Data.Profunctor.Product.Default (Default)
 import Data.Profunctor.Product.TH (makeAdaptorAndInstance)
+import Data.Text (Text)
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -59,7 +60,7 @@ $(makeAdaptorAndInstance "pUser" ''User')
 
 usersTable :: Table UserSetColumn UserGetColumn
 usersTable = Table "users" $ 
-  pUser User { uId = optional "id"
+  pUser User { uId = optional "user_id"
              , uUsername = required "username"
              , uPassword = required "password"
              , uEmail = required "email" 
@@ -68,8 +69,21 @@ usersTable = Table "users" $
 usersQuery :: Query UserGetColumn
 usersQuery = queryTable usersTable
 
-runUsersQuery :: Query UserGetColumn -> IO [User]
-runUsersQuery query = flip runQuery query =<< connection
+queryUsers :: IO [User]
+queryUsers = flip runQuery usersQuery =<< connection
+
+userByUsernameQuery :: Text -> Query UserGetColumn
+userByUsernameQuery username = proc () -> do
+  row@(User _ uUsername _ _) <- usersQuery -< ()
+  restrict -< uUsername .== pgStrictText username 
+  returnA -< row
+
+queryUserByUsername :: Text -> IO (Maybe User)
+queryUserByUsername username = do
+  user <- flip runQuery (userByUsernameQuery username) =<< connection
+  return $ case user of
+    [] -> Nothing
+    [user] -> Just user
 
 insertUser :: User -> IO Int64
 insertUser User {..} = runInsert' usersTable $ 
@@ -84,11 +98,11 @@ $(makeAdaptorAndInstance "pBlogPost" ''BlogPost')
 
 blogPostsTable :: Table BlogPostSetColumn BlogPostGetColumn
 blogPostsTable = Table "blog_posts" $ 
-  pBlogPost BlogPost { bpId = optional "id"
+  pBlogPost BlogPost { bpId = optional "blog_post_id"
                      , bpTitle = required "title"
                      , bpSlug = required "slug"
                      , bpBody = required "body"
-                     , bpCreatedAt = required "created_at"
+                     , bpCreatedOn = required "created_on"
                      }
 
 blogPostsQuery :: Query BlogPostGetColumn
@@ -116,5 +130,35 @@ insertBlogPost BlogPost {..} = runInsert' blogPostsTable $
            (pgStrictText bpTitle) 
            (pgStrictText bpSlug) 
            (pgStrictText bpBody) 
-           (pgUTCTime bpCreatedAt) 
+           (pgUTCTime bpCreatedOn) 
 
+-- Login tokens
+
+$(makeAdaptorAndInstance "pLoginToken" ''LoginToken')
+
+loginTokensTable :: Table LoginTokenColumn LoginTokenColumn
+loginTokensTable = Table "login_tokens" $ 
+  pLoginToken LoginToken { ltTokenKey = required "token_key"
+                         , ltCreatedOn = required "created_on"
+                         }
+
+loginTokensQuery :: Query LoginTokenColumn
+loginTokensQuery = queryTable loginTokensTable
+
+loginTokenQuery :: Text -> Query LoginTokenColumn
+loginTokenQuery tokenKey = proc () -> do
+  row@(LoginToken ltTokenKey _) <- loginTokensQuery -< ()
+  restrict -< ltTokenKey .== pgStrictText tokenKey 
+  returnA -< row
+
+queryLoginToken :: Text -> IO (Maybe LoginToken)
+queryLoginToken tokenKey = do
+  loginToken <- flip runQuery (loginTokenQuery tokenKey) =<< connection
+  return $ case loginToken of
+    [] -> Nothing
+    [loginToken] -> Just loginToken
+
+insertLoginToken :: LoginToken -> IO Int64
+insertLoginToken LoginToken {..} = runInsert' loginTokensTable $ 
+  LoginToken (pgStrictText ltTokenKey) (pgUTCTime ltCreatedOn)
+  

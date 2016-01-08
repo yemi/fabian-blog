@@ -16,6 +16,7 @@ import Network.Wai.Middleware.RequestLogger (logStdout)
 import qualified Crypto.Hash.SHA256 as SHA256
 
 import Data.Text.Encoding (decodeLatin1, encodeUtf8)
+import Data.Time.Clock (getCurrentTime)
 import Data.Maybe (isJust)
 import Data.Functor (($>))
 import qualified Data.UUID as UUID
@@ -64,7 +65,7 @@ getBlogPost slug = do
   blogPost <- liftIO $ queryBlogPost slug
   case blogPost of
     Just blogPost' -> return blogPost'
-    Nothing -> left $ err503 { errBody = "No blog posts found with the provided id." }
+    Nothing -> left $ err503 { errBody = "No blog posts found with the provided slug." }
 
 createUser :: Maybe LoginToken -> User -> EitherT ServantErr IO User
 createUser mt User {..} = do
@@ -76,16 +77,15 @@ createUser mt User {..} = do
 
 logIn :: LoginReq -> EitherT ServantErr IO LoginToken
 logIn LoginReq {..} = do
-  doc <- liftIO . runMongo . findOne $ select ["username" =: username] "users"
-  case doc of
-    Just doc' -> do
+  user <- liftIO $ queryUserByUsername username
+  case user of
+    Just (User {..}) -> do
       let password' = decodeLatin1 . SHA256.hash . encodeUtf8 $ password
-      let User {..} = documentToUser doc'
       if password' == uPassword then do
         uuid <- liftIO UUID.nextRandom
-        let token = LoginToken (UUID.toText uuid)
-        let doc = loginTokenToDocument token
-        liftIO . runMongo $ insert "validTokens" doc
+        now <- liftIO getCurrentTime
+        let token = LoginToken (UUID.toText uuid) now
+        liftIO $ insertLoginToken token
         return token
       else left $ ServantErr 400 "Username/password pair did not match" "" []
     Nothing -> left $ ServantErr 400 "User not found" "" []
@@ -95,14 +95,14 @@ logOut mt = do
   checkAuth mt
   maybe (return ()) logOutAction mt
   where
-    logOutAction (LoginToken token) =
-      liftIO . runMongo . deleteOne $ select ["token" =: token] "validTokens"
+    logOutAction (LoginToken {..}) =
+      liftIO . runMongo . deleteOne $ select ["token" =: ltTokenKey] "validTokens"
 
 checkAuth :: Maybe LoginToken -> EitherT ServantErr IO ()
 checkAuth = maybe unauthorized runCheck
   where
-  runCheck (LoginToken token) = do
-    doc <- liftIO . runMongo . findOne $ select ["token" =: token] "validTokens"
+  runCheck (LoginToken {..}) = do
+    doc <- liftIO . runMongo . findOne $ select ["token" =: ltTokenKey] "validTokens"
     let isValidToken = isJust doc
     unless isValidToken unauthorized
   unauthorized =
@@ -147,3 +147,4 @@ main :: IO ()
 main = do
   putStrLn "Running on port 8080"
   run 8080 app
+
