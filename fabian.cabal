@@ -22,7 +22,7 @@ executable fabian
                      , bytestring
                      , cryptohash
                      , either
-                     , mongoDB
+                     , jwt
                      , mtl
                      , opaleye
                      , product-profunctors

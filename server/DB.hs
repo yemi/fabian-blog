@@ -6,7 +6,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module DB where
 
-import qualified Database.MongoDB as MongoDB
 import Database.PostgreSQL.Simple (Connection, connectPostgreSQL)
 
 import Control.Arrow (returnA)
@@ -20,7 +19,7 @@ import Data.Text.Encoding (decodeLatin1, encodeUtf8)
 
 import qualified Crypto.Hash.SHA256 as SHA256
 
-import Opaleye 
+import Opaleye
   ( Table(Table)
   , Column()
   , Query()
@@ -37,15 +36,6 @@ import Opaleye.Operators (restrict, (.==))
 
 import Types
 
-dbName = "blog"
-
-runMongo :: MongoDB.Action IO a -> IO a
-runMongo action = do
-  pipe <- MongoDB.connect (MongoDB.host "127.0.0.1")
-  val <- MongoDB.access pipe MongoDB.master dbName action
-  MongoDB.close pipe
-  return val
-
 connection :: IO Connection
 connection = connectPostgreSQL "dbname='fabian_blog'"
 
@@ -59,11 +49,11 @@ runInsert' table columns = do
 $(makeAdaptorAndInstance "pUser" ''User')
 
 usersTable :: Table UserSetColumn UserGetColumn
-usersTable = Table "users" $ 
+usersTable = Table "users" $
   pUser User { uId = optional "user_id"
              , uUsername = required "username"
              , uPassword = required "password"
-             , uEmail = required "email" 
+             , uEmail = required "email"
              }
 
 usersQuery :: Query UserGetColumn
@@ -75,7 +65,7 @@ queryUsers = flip runQuery usersQuery =<< connection
 userByUsernameQuery :: Text -> Query UserGetColumn
 userByUsernameQuery username = proc () -> do
   row@(User _ uUsername _ _) <- usersQuery -< ()
-  restrict -< uUsername .== pgStrictText username 
+  restrict -< uUsername .== pgStrictText username
   returnA -< row
 
 queryUserByUsername :: Text -> IO (Maybe User)
@@ -86,10 +76,10 @@ queryUserByUsername username = do
     [user] -> Just user
 
 insertUser :: User -> IO Int64
-insertUser User {..} = runInsert' usersTable $ 
-  User Nothing 
-       (pgStrictText uUsername) 
-       (pgStrictText uPassword) 
+insertUser User {..} = runInsert' usersTable $
+  User Nothing
+       (pgStrictText uUsername)
+       (pgStrictText uPassword)
        (pgStrictText uEmail)
 
 -- Blog posts
@@ -97,7 +87,7 @@ insertUser User {..} = runInsert' usersTable $
 $(makeAdaptorAndInstance "pBlogPost" ''BlogPost')
 
 blogPostsTable :: Table BlogPostSetColumn BlogPostGetColumn
-blogPostsTable = Table "blog_posts" $ 
+blogPostsTable = Table "blog_posts" $
   pBlogPost BlogPost { bpId = optional "blog_post_id"
                      , bpTitle = required "title"
                      , bpSlug = required "slug"
@@ -114,7 +104,7 @@ queryBlogPosts = flip runQuery blogPostsQuery =<< connection
 blogPostQuery :: Slug -> Query BlogPostGetColumn
 blogPostQuery slug = proc () -> do
   row@(BlogPost _ _ bpSlug _ _) <- blogPostsQuery -< ()
-  restrict -< bpSlug .== pgString slug 
+  restrict -< bpSlug .== pgString slug
   returnA -< row
 
 queryBlogPost :: Slug -> IO (Maybe BlogPost)
@@ -125,40 +115,9 @@ queryBlogPost slug = do
     [blogPost] -> Just blogPost
 
 insertBlogPost :: BlogPost -> IO Int64
-insertBlogPost BlogPost {..} = runInsert' blogPostsTable $ 
-  BlogPost Nothing 
-           (pgStrictText bpTitle) 
-           (pgStrictText bpSlug) 
-           (pgStrictText bpBody) 
-           (pgUTCTime bpCreatedOn) 
-
--- Login tokens
-
-$(makeAdaptorAndInstance "pLoginToken" ''LoginToken')
-
-loginTokensTable :: Table LoginTokenColumn LoginTokenColumn
-loginTokensTable = Table "login_tokens" $ 
-  pLoginToken LoginToken { ltTokenKey = required "token_key"
-                         , ltCreatedOn = required "created_on"
-                         }
-
-loginTokensQuery :: Query LoginTokenColumn
-loginTokensQuery = queryTable loginTokensTable
-
-loginTokenQuery :: Text -> Query LoginTokenColumn
-loginTokenQuery tokenKey = proc () -> do
-  row@(LoginToken ltTokenKey _) <- loginTokensQuery -< ()
-  restrict -< ltTokenKey .== pgStrictText tokenKey 
-  returnA -< row
-
-queryLoginToken :: Text -> IO (Maybe LoginToken)
-queryLoginToken tokenKey = do
-  loginToken <- flip runQuery (loginTokenQuery tokenKey) =<< connection
-  return $ case loginToken of
-    [] -> Nothing
-    [loginToken] -> Just loginToken
-
-insertLoginToken :: LoginToken -> IO Int64
-insertLoginToken LoginToken {..} = runInsert' loginTokensTable $ 
-  LoginToken (pgStrictText ltTokenKey) (pgUTCTime ltCreatedOn)
-  
+insertBlogPost BlogPost {..} = runInsert' blogPostsTable $
+  BlogPost Nothing
+           (pgStrictText bpTitle)
+           (pgStrictText bpSlug)
+           (pgStrictText bpBody)
+           (pgUTCTime bpCreatedOn)

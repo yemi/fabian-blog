@@ -14,11 +14,7 @@ import Data.Aeson (ToJSON, FromJSON)
 import Data.Text (Text)
 import Data.Time (UTCTime())
 
-import Database.MongoDB (Document, (=:))
-
 import Opaleye (Column(), PGText, PGInt4, PGTimestamptz)
-
-import DB.Utils
 
 import Servant
 import Servant.HTML.Blaze
@@ -28,15 +24,18 @@ import Text.Blaze.Html5
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 
-type API = "api" :> "posts" :> Get '[JSON] [BlogPost] :<|>
-           "api" :> "post" :> Authorized (ReqBody '[JSON] BlogPost :> Post '[JSON] BlogPost) :<|>
-           "api" :> "post" :> Capture "slug" String :> Get '[JSON] BlogPost :<|>
-           "api" :> "user" :> Authorized (ReqBody '[JSON] User :> Post '[JSON] User) :<|>
-           "api" :> "user" :> "login" :> ReqBody '[JSON] LoginReq :> Post '[JSON] LoginToken :<|>
-           "api" :> "user" :> Authorized ("logout" :> Post '[JSON] ()) :<|>
-           "static" :> Raw :<|>
-           "admin" :> Get '[HTML] Html :<|>
-           Get '[HTML] Html
+type AppAPI = Get '[HTML] Html
+         :<|> "admin" :> Get '[HTML] Html
+         :<|> "api" :> "posts" :> PostAPI
+         :<|> "api" :> "users" :> UserAPI
+         :<|> "static" :> Raw
+
+type PostAPI = Get '[JSON] [BlogPost]
+          :<|> Authorized (ReqBody '[JSON] BlogPost :> Post '[JSON] BlogPost)
+
+type UserAPI = Authorized (ReqBody '[JSON] User :> Post '[JSON] User)
+          :<|> "login" :> ReqBody '[JSON] LoginReq :> Post '[JSON] Text
+          :<|> Authorized ("logout" :> Post '[JSON] ())
 
 data BlogPost' a b c d e = BlogPost
   { bpId :: a
@@ -45,24 +44,24 @@ data BlogPost' a b c d e = BlogPost
   , bpBody :: d
   , bpCreatedOn :: e
   } deriving (Show, Eq, Generic)
-  
+
 type BlogPost = BlogPost' Int Text Text Text UTCTime
-type BlogPostSetColumn = BlogPost' (Maybe (Column PGInt4)) 
-                                   (Column PGText) 
-                                   (Column PGText) 
-                                   (Column PGText) 
+type BlogPostSetColumn = BlogPost' (Maybe (Column PGInt4))
+                                   (Column PGText)
+                                   (Column PGText)
+                                   (Column PGText)
                                    (Column PGTimestamptz)
-                                   
-type BlogPostGetColumn = BlogPost' (Column PGInt4) 
-                                   (Column PGText) 
-                                   (Column PGText) 
-                                   (Column PGText) 
+
+type BlogPostGetColumn = BlogPost' (Column PGInt4)
+                                   (Column PGText)
+                                   (Column PGText)
+                                   (Column PGText)
                                    (Column PGTimestamptz)
 
 instance ToJSON BlogPost
 instance FromJSON BlogPost
 
-data User' a b c d = User 
+data User' a b c d = User
   { uId :: a
   , uUsername :: b
   , uPassword :: c
@@ -70,31 +69,20 @@ data User' a b c d = User
   } deriving (Show, Eq, Generic)
 
 type User = User' Int Text Text Text
-type UserSetColumn = User' (Maybe (Column PGInt4)) 
-                           (Column PGText) 
-                           (Column PGText) 
+type UserSetColumn = User' (Maybe (Column PGInt4))
                            (Column PGText)
-                           
-type UserGetColumn = User' (Column PGInt4) 
-                           (Column PGText) 
-                           (Column PGText) 
+                           (Column PGText)
+                           (Column PGText)
+
+type UserGetColumn = User' (Column PGInt4)
+                           (Column PGText)
+                           (Column PGText)
                            (Column PGText)
 
 instance ToJSON User
 instance FromJSON User
 
-data LoginToken' a b = LoginToken 
-  { ltTokenKey :: a 
-  , ltCreatedOn :: b
-  } deriving (Show, Eq, Generic)
-
-type LoginToken = LoginToken' Text UTCTime 
-type LoginTokenColumn = LoginToken' (Column PGText) (Column PGTimestamptz)
-
-instance ToJSON LoginToken
-instance FromJSON LoginToken
-instance ToText LoginToken
-instance FromText LoginToken
+type JWT = Text
 
 data LoginReq = LoginReq
   { username :: Text
@@ -104,16 +92,6 @@ data LoginReq = LoginReq
 instance FromJSON LoginReq
 instance ToJSON LoginReq
 
-type Authorized t = Header "Authorization" LoginToken :> t
+type Authorized t = Header "Authorization" JWT :> t
 
 type Slug = String
-
-documentToUser :: Document -> User
-documentToUser doc = do
-  let uUsername = getText "username" doc
-  let uPassword = getText "password" doc
-  User 12 uUsername uPassword "test@te.se"
-
---loginTokenToDocument :: LoginToken -> Document
---loginTokenToDocument (LoginToken token) = ["token" =: token]
-
