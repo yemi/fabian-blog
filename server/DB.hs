@@ -1,6 +1,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -21,6 +22,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 
 import Opaleye
   ( Table(Table)
+  , QueryRunner()
   , Column()
   , Query()
   , PGText
@@ -28,7 +30,7 @@ import Opaleye
   , required
   , optional
   , queryTable
-  , runInsert
+  , runInsertReturning
   )
 import Opaleye.RunQuery (runQuery)
 import Opaleye.PGTypes (pgString, pgStrictText, pgInt4, pgUTCTime)
@@ -39,10 +41,13 @@ import Types
 connection :: IO Connection
 connection = connectPostgreSQL "dbname='fabian_blog'"
 
-runInsert' :: Table setColumns getColumns -> setColumns -> IO Int64
-runInsert' table columns = do
+runInsertReturning' :: Default QueryRunner getColumns a =>
+                      Table setColumns getColumns ->
+                      setColumns ->
+                      IO [a]
+runInsertReturning' table columns = do
   conn <- connection
-  runInsert conn table columns
+  runInsertReturning conn table columns id
 
 -- Users
 
@@ -75,12 +80,14 @@ queryUserByUsername username = do
     [] -> Nothing
     [user] -> Just user
 
-insertUser :: User -> IO Int64
-insertUser User {..} = runInsert' usersTable $
-  User Nothing
-       (pgStrictText uUsername)
-       (pgStrictText uPassword)
-       (pgStrictText uEmail)
+insertUser :: NewUser -> IO User
+insertUser NewUser {..} = do
+  [user] <- runInsertReturning' usersTable $
+    User Nothing
+         (pgStrictText nuUsername)
+         (pgStrictText nuPassword)
+         (pgStrictText nuEmail)
+  return user
 
 -- Blog posts
 
@@ -92,7 +99,8 @@ blogPostsTable = Table "blog_posts" $
                      , bpTitle = required "title"
                      , bpSlug = required "slug"
                      , bpBody = required "body"
-                     , bpCreatedOn = required "created_on"
+                     , bpCreatedBy = required "created_by"
+                     , bpCreatedOn = optional "created_on"
                      }
 
 blogPostsQuery :: Query BlogPostGetColumn
@@ -103,7 +111,7 @@ queryBlogPosts = flip runQuery blogPostsQuery =<< connection
 
 blogPostQuery :: Slug -> Query BlogPostGetColumn
 blogPostQuery slug = proc () -> do
-  row@(BlogPost _ _ bpSlug _ _) <- blogPostsQuery -< ()
+  row@(BlogPost _ _ bpSlug _ _ _) <- blogPostsQuery -< ()
   restrict -< bpSlug .== pgString slug
   returnA -< row
 
@@ -114,10 +122,13 @@ queryBlogPost slug = do
     [] -> Nothing
     [blogPost] -> Just blogPost
 
-insertBlogPost :: BlogPost -> IO Int64
-insertBlogPost BlogPost {..} = runInsert' blogPostsTable $
-  BlogPost Nothing
-           (pgStrictText bpTitle)
-           (pgStrictText bpSlug)
-           (pgStrictText bpBody)
-           (pgUTCTime bpCreatedOn)
+insertBlogPost :: Int -> NewBlogPost -> IO BlogPost
+insertBlogPost userId NewBlogPost {..} = do
+  [blogPost] <- runInsertReturning' blogPostsTable $
+    BlogPost Nothing
+             (pgStrictText nbpTitle)
+             (pgStrictText nbpTitle) --TODO hyphenate title
+             (pgStrictText nbpBody)
+             (pgInt4 userId)
+             Nothing
+  return blogPost

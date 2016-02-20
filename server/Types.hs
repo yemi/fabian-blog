@@ -31,35 +31,55 @@ type AppAPI = Get '[HTML] Html
          :<|> "static" :> Raw
 
 type PostAPI = Get '[JSON] [BlogPost]
-          :<|> Authorized (ReqBody '[JSON] BlogPost :> Post '[JSON] BlogPost)
+          :<|> Authorized (ReqBody '[JSON] NewBlogPost :> Post '[JSON] BlogPost)
 
-type UserAPI = Authorized (ReqBody '[JSON] User :> Post '[JSON] User)
+type UserAPI = Authorized (ReqBody '[JSON] NewUser :> Post '[JSON] User)
           :<|> "login" :> ReqBody '[JSON] LoginReq :> Post '[JSON] Text
           :<|> Authorized ("logout" :> Post '[JSON] ())
 
-data BlogPost' a b c d e = BlogPost
+data NewBlogPost = NewBlogPost
+  { nbpTitle :: Text
+  , nbpBody :: Text
+  } deriving (Show, Eq, Generic)
+
+instance ToJSON NewBlogPost
+instance FromJSON NewBlogPost
+
+data BlogPost' a b c d e f = BlogPost
   { bpId :: a
   , bpTitle :: b
   , bpSlug :: c
   , bpBody :: d
-  , bpCreatedOn :: e
+  , bpCreatedBy :: e
+  , bpCreatedOn :: f
   } deriving (Show, Eq, Generic)
 
-type BlogPost = BlogPost' Int Text Text Text UTCTime
+type BlogPost = BlogPost' Int Text Text Text Int UTCTime
 type BlogPostSetColumn = BlogPost' (Maybe (Column PGInt4))
                                    (Column PGText)
                                    (Column PGText)
                                    (Column PGText)
-                                   (Column PGTimestamptz)
+                                   (Column PGInt4)
+                                   (Maybe (Column PGTimestamptz))
 
 type BlogPostGetColumn = BlogPost' (Column PGInt4)
                                    (Column PGText)
                                    (Column PGText)
                                    (Column PGText)
+                                   (Column PGInt4)
                                    (Column PGTimestamptz)
 
 instance ToJSON BlogPost
 instance FromJSON BlogPost
+
+data NewUser = NewUser
+  { nuUsername :: Text
+  , nuPassword :: Text
+  , nuEmail :: Text
+  } deriving (Show, Eq, Generic)
+
+instance ToJSON NewUser
+instance FromJSON NewUser
 
 data User' a b c d = User
   { uId :: a
@@ -82,8 +102,6 @@ type UserGetColumn = User' (Column PGInt4)
 instance ToJSON User
 instance FromJSON User
 
-type JWT = Text
-
 data LoginReq = LoginReq
   { username :: Text
   , password :: Text
@@ -92,6 +110,6 @@ data LoginReq = LoginReq
 instance FromJSON LoginReq
 instance ToJSON LoginReq
 
-type Authorized t = Header "Authorization" JWT :> t
+type Authorized t = Header "Authorization" Text :> t
 
 type Slug = String
