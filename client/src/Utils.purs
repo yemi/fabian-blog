@@ -15,5 +15,8 @@ post url content = affjax $ defaultRequest
   { method = POST
   , url = url
   , content = Just content
-  , headers = [ RequestHeader "Accept" "application/json", RequestHeader "Content-Type" "application/json" ]
+  , headers =
+    [ RequestHeader "Accept" "application/json"
+    , RequestHeader "Content-Type" "application/json"
+    ]
   }

@@ -8,13 +8,13 @@ import Servant
 
 import Types (PostAPI, UserAPI, AppAPI)
 import Page (homePage, adminPage)
-import API (api, getBlogPosts, createBlogPost, createUser, logIn, logOut)
+import API (api, getBlogPosts, createBlogPost, createUser, login)
 
 postServer :: Server PostAPI
 postServer = getBlogPosts :<|> createBlogPost
 
 userServer :: Server UserAPI
-userServer = createUser :<|> logIn :<|> logOut
+userServer = createUser :<|> login
 
 server :: Server AppAPI
 server = homePage
