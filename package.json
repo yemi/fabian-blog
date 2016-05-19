@@ -7,7 +7,7 @@
     "watch": "pulp -w browserify --src-path client/src --build-path client/output --to client/dist/main.js --test-path client/test",
     "psci": "pulp psci --src-path client/src/",
     "psc-ide-server": "psc-ide-server --directory client/",
-    "browser-sync": "browser-sync start --proxy \"localhost:8080\" --files \"client/dist/*.js\""
+    "dev-server": "pulp -w server -o \"client/output\" --src-path \"client/src\""
   },
   "author": "Fabian Rios",
   "license": "ISC",

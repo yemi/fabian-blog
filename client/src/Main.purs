@@ -9,7 +9,8 @@ import Halogen.Util (appendToBody, onLoad)
 
 import Prelude (Unit, ($), bind, unit, pure, const)
 
-import Papi (ui, initialState)
+import Papi (ui)
+import Papi.State (initialState)
 
 import Router (routeSignal)
 

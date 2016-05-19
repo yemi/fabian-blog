@@ -22,7 +22,7 @@ import Routing.Match.Class (lit)
 
 import Types (Route(..))
 
-import Papi (Query(GoTo))
+import Papi.Query (Query(GoTo))
 
 routing :: Match Route
 routing = login <|> posts <|> create <|> profile
